@@ -1,0 +1,43 @@
+{
+  "places": [
+    {"id": "p1",  "name": "Kanaka Durga Temple",                        "type": "temple",   "avg_time_hours": 2.5, "lat": 16.518,  "lng": 80.617,  "opening_time": "04:00", "closing_time": "21:00"},
+    {"id": "p2",  "name": "Prakasam Barrage",                           "type": "landmark", "avg_time_hours": 1.0, "lat": 16.505,  "lng": 80.606,  "opening_time": "00:00", "closing_time": "23:59"},
+    {"id": "p3",  "name": "Bhavani Island",                             "type": "nature",   "avg_time_hours": 4.0, "lat": 16.527,  "lng": 80.584,  "opening_time": "09:00", "closing_time": "18:00"},
+    {"id": "p4",  "name": "Undavalli Caves",                            "type": "heritage", "avg_time_hours": 2.0, "lat": 16.496,  "lng": 80.579,  "opening_time": "09:00", "closing_time": "17:30"},
+    {"id": "p5",  "name": "Mangalagiri Panakala Narasimha Swamy Temple","type": "temple",   "avg_time_hours": 2.0, "lat": 16.429,  "lng": 80.564,  "opening_time": "06:00", "closing_time": "20:00"},
+    {"id": "p6",  "name": "Gandhi Hill",                                "type": "landmark", "avg_time_hours": 1.5, "lat": 16.514,  "lng": 80.618,  "opening_time": "16:00", "closing_time": "20:30"},
+    {"id": "p7",  "name": "Kondapalli Fort",                            "type": "heritage", "avg_time_hours": 3.0, "lat": 16.634,  "lng": 80.534,  "opening_time": "10:30", "closing_time": "17:00"},
+    {"id": "p8",  "name": "Rajiv Gandhi Park",                          "type": "nature",   "avg_time_hours": 1.5, "lat": 16.516,  "lng": 80.612,  "opening_time": "14:00", "closing_time": "20:00"},
+    {"id": "p9",  "name": "Gunadala Matha Shrine",                      "type": "landmark", "avg_time_hours": 1.5, "lat": 16.511,  "lng": 80.655,  "opening_time": "07:00", "closing_time": "19:00"},
+    {"id": "p10", "name": "Victoria Jubilee Museum",                    "type": "heritage", "avg_time_hours": 1.5, "lat": 16.508,  "lng": 80.627,  "opening_time": "10:30", "closing_time": "17:00"},
+    {"id": "p11", "name": "PVP Square Mall",                            "type": "shopping", "avg_time_hours": 3.0, "lat": 16.502,  "lng": 80.641,  "opening_time": "10:00", "closing_time": "22:00"},
+    {"id": "p12", "name": "Trendset Mall",                              "type": "shopping", "avg_time_hours": 2.5, "lat": 16.495,  "lng": 80.648,  "opening_time": "10:00", "closing_time": "22:00"},
+    {"id": "p13", "name": "Paritala Anjaneya Temple",                   "type": "temple",   "avg_time_hours": 1.0, "lat": 16.583,  "lng": 80.383,  "opening_time": "06:00", "closing_time": "20:00"},
+    {"id": "p14", "name": "Moghalrajpuram Caves",                       "type": "heritage", "avg_time_hours": 1.0, "lat": 16.505,  "lng": 80.646,  "opening_time": "09:00", "closing_time": "18:00"},
+    {"id": "p15", "name": "Krishna River Camp",                         "type": "nature",   "avg_time_hours": 3.0, "lat": 16.520,  "lng": 80.590,  "opening_time": "07:00", "closing_time": "19:00"}
+  ],
+  "hotels": [
+    {"name": "Hotel Ilapuram",          "price_range": "₹1200–₹2500",  "near": "Kanaka Durga Temple",   "lat": 16.517, "lng": 80.619},
+    {"name": "Novotel Vijayawada Varun","price_range": "₹5000–₹8000",  "near": "Prakasam Barrage",      "lat": 16.506, "lng": 80.638},
+    {"name": "The Gateway Hotel",       "price_range": "₹4000–₹6500",  "near": "Bhavani Island",        "lat": 16.509, "lng": 80.640},
+    {"name": "Hotel Manorama",          "price_range": "₹1500–₹3000",  "near": "Prakasam Barrage",      "lat": 16.510, "lng": 80.621},
+    {"name": "Bhavani Island Resort",   "price_range": "₹3500–₹6000",  "near": "Bhavani Island",        "lat": 16.527, "lng": 80.584},
+    {"name": "Quality Hotel DV Manor",  "price_range": "₹3000–₹5000",  "near": "PVP Square Mall",       "lat": 16.501, "lng": 80.642},
+    {"name": "Lemon Tree Premier",      "price_range": "₹4500–₹7000",  "near": "Trendset Mall",         "lat": 16.494, "lng": 80.649},
+    {"name": "Hotel Marg Krishnaaya",   "price_range": "₹2500–₹4000",  "near": "Trendset Mall",         "lat": 16.496, "lng": 80.647},
+    {"name": "Murali Fortune",          "price_range": "₹2000–₹3500",  "near": "Victoria Jubilee Museum","lat": 16.507, "lng": 80.628},
+    {"name": "Minerva Grand",           "price_range": "₹3000–₹4500",  "near": "Gunadala Matha Shrine", "lat": 16.509, "lng": 80.650}
+  ],
+  "food": [
+    {"name": "Babai Hotel",              "type": "Authentic Andhra",      "lat": 16.504, "lng": 80.606},
+    {"name": "Sweet Magic",              "type": "South Indian / Sweets", "lat": 16.517, "lng": 80.618},
+    {"name": "Barkaas Arabic Restaurant","type": "Mandi / Arabian",       "lat": 16.494, "lng": 80.649},
+    {"name": "Minerva Grand Restaurant", "type": "Multi-Cuisine",         "lat": 16.495, "lng": 80.647},
+    {"name": "Hotel Sri Ramayya",        "type": "Traditional Meals",     "lat": 16.516, "lng": 80.616},
+    {"name": "Ironhill Brewery",         "type": "Lounge / Continental",  "lat": 16.493, "lng": 80.650},
+    {"name": "The Spicy Venue",          "type": "Andhra Meals",          "lat": 16.501, "lng": 80.641},
+    {"name": "Tycoons",                  "type": "Fine Dining",           "lat": 16.508, "lng": 80.626},
+    {"name": "RR Durbar",               "type": "Multi-Cuisine",          "lat": 16.510, "lng": 80.654},
+    {"name": "Crossroads Restaurant",   "type": "North Indian",           "lat": 16.526, "lng": 80.583}
+  ]
+}
