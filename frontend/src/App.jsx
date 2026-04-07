@@ -408,6 +408,13 @@ export default function App() {
         </div>
       )}
 
+      {/* Agent Activity Panel (Visible during streaming and after) */}
+      {agentMode && agentStates && (
+        <div className="glass-panel" style={{ marginBottom: '1.5rem' }}>
+          <AgentPanel agentStates={agentStates} toolCalls={toolCalls} />
+        </div>
+      )}
+
       {/* Results */}
       {result?.raw_data && (() => {
         const meta           = result.raw_data.metadata;
@@ -419,13 +426,6 @@ export default function App() {
         };
         return (
           <>
-            {/* Agent Activity Panel */}
-            {agentMode && agentStates && (
-              <div className="glass-panel" style={{ marginBottom: '1.5rem' }}>
-                <AgentPanel agentStates={agentStates} toolCalls={toolCalls} />
-              </div>
-            )}
-
             {extraDays && (
               <div className="success-banner">
                 <strong>📊 Day Optimisation Alert</strong><br />
