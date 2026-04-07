@@ -16,13 +16,13 @@ Fallback: APPROVED with score=7 and a note that critic was unavailable
 
 import json
 import logging
-from google import genai
+from ai_service import AIClient
 from engines.clustering_engine import haversine
 
 log = logging.getLogger(__name__)
 
 
-def run(client: genai.Client, planner_output: dict, constraints: dict) -> dict:
+def run(client: AIClient, planner_output: dict, constraints: dict) -> dict:
     """
     Returns:
         {
@@ -97,12 +97,7 @@ Score guide: 9-10=excellent, 7-8=good, 5-6=acceptable, <5=needs revision.
 Only use NEEDS_REVISION if score < 5."""
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config={"response_mime_type": "application/json"},
-        )
-        raw = json.loads(response.text)
+        raw = client.generate_json(prompt)
         status = raw.get("status", "APPROVED")
         score  = int(raw.get("score", 7))
 

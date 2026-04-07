@@ -1,5 +1,10 @@
 fastapi
 uvicorn
-pydantic
+pydantic[email]
 google-genai
 python-dotenv
+motor
+python-jose[cryptography]
+bcrypt
+python-multipart
+openai
