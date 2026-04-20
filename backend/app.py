@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import json, os, copy, logging, asyncio
 
-from engines.constraint_engine import calculate_optimal_days, filter_places
+from engines.constraint_engine import calculate_optimal_days
+from engines.prolog_engine import filter_places_with_prolog
 from engines.clustering_engine import cluster_places_by_day
 from engines.transport_engine import calculate_day_routes
 from engines.recommendation_engine import get_recommendations
@@ -141,8 +142,8 @@ async def plan_trip_stream(req: PlanRequest, current_user: UserInDB = Depends(ge
     constraints = req.model_dump()
 
     async def event_generator():
-        # ── Pre-run: filter + budget ──────────────────────────────────────────
-        filtered_raw = filter_places(DB['places'], interests=req.interests)
+        # ── Pre-run: filter + budget (now using Prolog) ──────────
+        filtered_raw = filter_places_with_prolog(DB['places'], interests=req.interests)
         if not filtered_raw:
             yield sse("error", message="No places match your interests.")
             return
@@ -276,7 +277,7 @@ async def plan_trip(req: PlanRequest, current_user: UserInDB = Depends(get_curre
     log.info(f"[REQUEST] people={req.people_count}, budget={req.budget}, "
              f"interests={req.interests}, days={req.days}")
 
-    filtered_raw = filter_places(DB['places'], interests=req.interests)
+    filtered_raw = filter_places_with_prolog(DB['places'], interests=req.interests)
     if not filtered_raw:
         raise HTTPException(status_code=404, detail="No places match your interests.")
 
