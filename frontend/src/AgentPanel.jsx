@@ -160,7 +160,7 @@ export default function AgentPanel({ agentStates, toolCalls }) {
       }}>
         Agent Pipeline Activity
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', maxWidth: '100%' }}>
+      <div className="agent-grid">
         {AGENTS.map(agent => (
           <AgentCard
             key={agent.id}

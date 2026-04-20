@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -10,6 +9,12 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import './App.css';
 import { downloadPDF } from './generatePDF';
 import AgentPanel from './AgentPanel';
+import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { useAuthStore } from './store/useAuthStore';
+import { usePlanStore } from './store/usePlanStore';
+import Login from './components/Login';
+import Register from './components/Register';
+import { LogOut, User, History, Map as MapIcon, Sparkles } from 'lucide-react';
 
 // Fix leaflet's broken default icon paths with bundlers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -18,10 +23,6 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   shadowUrl:     markerShadow,
 });
-
-// ── BUG FIX: use env variable, never hardcode ─────────────────────────────
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-console.log('[CONFIG] API_BASE =', API_BASE);
 
 const INTEREST_OPTIONS = [
   { id: 'temple',   label: '🛕 Temple' },
@@ -44,179 +45,60 @@ const LOADING_STEPS = [
 
 const DAY_COLORS = ['#FF5A5F', '#2ed573', '#ffa502', '#1e90ff', '#a29bfe'];
 
-/** Cycles through LOADING_STEPS every intervalMs while active */
 function useLoadingCycle(active, intervalMs = 2500) {
   const [step, setStep] = useState(0);
-  const ref = useRef(null);
   useEffect(() => {
+    let interval;
     if (active) {
       setStep(0);
-      ref.current = setInterval(() => setStep(s => (s + 1) % LOADING_STEPS.length), intervalMs);
-    } else {
-      clearInterval(ref.current);
+      interval = setInterval(() => setStep(s => (s + 1) % LOADING_STEPS.length), intervalMs);
     }
-    return () => clearInterval(ref.current);
+    return () => clearInterval(interval);
   }, [active, intervalMs]);
   return LOADING_STEPS[step];
 }
 
-export default function App() {
-  const [form, setForm]           = useState({ peopleCount: 2, budget: 5000, days: '' });
-  const [interests, setInterests]  = useState([]);
-  const [loading, setLoading]      = useState(false);
-  const [error, setError]          = useState('');
-  const [result, setResult]        = useState(null);
-  const [activeDay, setActiveDay]  = useState(1);
-  const [agentMode, setAgentMode]  = useState(true);   // default: multi-agent
-  const [agentStates, setAgentStates] = useState(null); // {researcher:{status,output}, ...}
-  const [toolCalls, setToolCalls]  = useState([]);
-  const loadingMsg                 = useLoadingCycle(loading && !agentMode);
+function MainPlanner() {
+  const { user, logout, isAuthenticated } = useAuthStore();
+  const { 
+    loading, error, currentResult, agentStates, toolCalls, 
+    activeDay, startPlanningStream, setActiveDay, plans, fetchPlans, setError, setCurrentPlan 
+  } = usePlanStore();
+  
+  const [form, setForm] = useState({ peopleCount: 2, budget: 5000, days: '' });
+  const [interests, setInterests] = useState([]);
+  const [agentMode, setAgentMode] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
+  const loadingMsg = useLoadingCycle(loading);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchPlans();
+    }
+  }, [isAuthenticated, fetchPlans]);
 
   const updateForm = (key, val) => setForm(f => ({ ...f, [key]: val }));
-
   const toggleInterest = (id) =>
     setInterests(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
 
-  // ── Multi-Agent SSE Stream ────────────────────────────────────────────────
-  const handleStreamSubmit = async () => {
-    console.group('[AGENT-STREAM] Starting multi-agent pipeline');
-    setLoading(true);
-    setError('');
-    setResult(null);
-    setToolCalls([]);
-    setAgentStates({
-      researcher: { status: 'idle' },
-      planner:    { status: 'idle' },
-      critic:     { status: 'idle' },
-      formatter:  { status: 'idle' },
-    });
-
+  const handleSubmit = () => {
+    if (!isAuthenticated) {
+      setError('Please login to generate a travel plan.');
+      navigate('/login');
+      return;
+    }
     const payload = {
       people_count: parseInt(form.peopleCount, 10) || 1,
       budget:       parseFloat(form.budget)         || 1000,
       interests,
       days:         form.days ? parseInt(form.days, 10) : null,
     };
-    console.log('[PAYLOAD]', payload);
-
-    try {
-      const res = await fetch(`${API_BASE}/api/plan/stream`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
-      });
-
-      const reader = res.body.getReader();
-      const dec    = new TextDecoder();
-      let buf = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-
-        const lines = buf.split('\n\n');
-        buf = lines.pop();
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const event = JSON.parse(line.slice(6));
-          console.log('[SSE]', event);
-
-          if (event.type === 'agent_start') {
-            setAgentStates(prev => ({
-              ...prev,
-              [event.agent]: { status: 'running', output: null },
-            }));
-          } else if (event.type === 'tool_call') {
-            setToolCalls(prev => [...prev, { tool: event.tool, result: event.result }]);
-          } else if (event.type === 'agent_done') {
-            setAgentStates(prev => ({
-              ...prev,
-              [event.agent]: { status: 'done', output: event.output },
-            }));
-          } else if (event.type === 'complete') {
-            console.log('[COMPLETE] result =', event.result);
-            setResult(event.result);
-            setActiveDay(1);
-          } else if (event.type === 'error') {
-            setError(event.message);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[STREAM ERROR]', err);
-      setError(err.message || 'Stream connection failed');
-    } finally {
-      setLoading(false);
-      console.groupEnd();
-    }
+    startPlanningStream(payload, useAuthStore.getState().token);
   };
 
-  const handleSubmit = agentMode ? handleStreamSubmit : handleLegacySubmit;
-
-  // ── Legacy single-request submit (non-agent mode) ─────────────────────────
-  async function handleLegacySubmit() {
-    console.group('[SUBMIT] User clicked Generate');
-
-    const payload = {
-      people_count: parseInt(form.peopleCount, 10) || 1,
-      budget:       parseFloat(form.budget)         || 1000,
-      interests,
-      days:         form.days ? parseInt(form.days, 10) : null,
-    };
-
-    console.log('[PAYLOAD]', payload);
-
-    if (payload.people_count < 1) {
-      console.warn('[VALIDATION] people_count must be ≥ 1');
-      setError('Number of people must be at least 1.');
-      console.groupEnd();
-      return;
-    }
-    if (payload.budget < 1) {
-      console.warn('[VALIDATION] budget must be > 0');
-      setError('Budget must be greater than ₹0.');
-      console.groupEnd();
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    setResult(null);
-
-    try {
-      const url = `${API_BASE}/api/plan`;
-      console.log('[REQUEST] POST', url);
-      const t0  = performance.now();
-
-      const res = await axios.post(url, payload, { timeout: 30000 });
-
-      const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-      console.log(`[RESPONSE] ${res.status} in ${elapsed}s`, res.data);
-
-      if (!res.data?.raw_data) {
-        console.error('[ERROR] raw_data missing from response', res.data);
-        throw new Error('Server returned unexpected structure');
-      }
-
-      setResult(res.data);
-      setActiveDay(1);
-      console.log('[ITINERARY] days =', res.data.raw_data.itinerary.length);
-    } catch (err) {
-      const msg = err.response?.data?.detail || err.message || 'Unknown error';
-      console.error('[CAUGHT ERROR]', err);
-      console.error('[ERROR MSG]', msg);
-      setError(msg);
-    } finally {
-      setLoading(false);
-      console.groupEnd();
-    }
-  }
-
-  // ── Map ───────────────────────────────────────────────────────────────────
   const renderMap = () => {
-    const itinerary = result?.raw_data?.itinerary;
+    const itinerary = currentResult?.raw_data?.itinerary;
     if (!itinerary) return null;
     const dayData = itinerary.find(d => d.day === activeDay);
     if (!dayData?.places?.length) return null;
@@ -251,9 +133,8 @@ export default function App() {
     );
   };
 
-  // ── Day detail ────────────────────────────────────────────────────────────
   const renderDayDetail = () => {
-    const dayData = result?.raw_data?.itinerary?.find(d => d.day === activeDay);
+    const dayData = currentResult?.raw_data?.itinerary?.find(d => d.day === activeDay);
     if (!dayData) return null;
 
     return (
@@ -321,31 +202,84 @@ export default function App() {
     );
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="app-container">
+    <>
+      <div className="user-bar">
+        {isAuthenticated ? (
+          <>
+            <div className="user-info">
+              <User size={16} />
+              <span>{user?.username}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                className={`btn-ghost ${showHistory ? 'active-pill' : ''}`} 
+                onClick={() => setShowHistory(!showHistory)}
+              >
+                <History size={16} style={{ marginRight: 8 }} /> History
+              </button>
+              <button className="btn-ghost" onClick={() => logout()}>
+                <LogOut size={16} style={{ marginRight: 8 }} /> Logout
+              </button>
+            </div>
+          </>
+        ) : (
+          <button className="btn-primary" onClick={() => navigate('/login')} style={{ width: 'auto', padding: '0.4rem 1.5rem' }}>
+            Login
+          </button>
+        )}
+      </div>
+
+      {showHistory && isAuthenticated && (
+        <div className="history-overlay">
+          <div className="glass-panel history-sidebar">
+            <div className="history-header">
+              <h3><History size={18} /> Saved Plans</h3>
+              <button className="btn-close" onClick={() => setShowHistory(false)}>×</button>
+            </div>
+            <div className="history-list">
+              {plans.length === 0 && <p className="empty-msg">No saved plans yet.</p>}
+              {plans.map((p) => (
+                <div 
+                  key={p._id} 
+                  className={`history-item ${currentResult?.raw_data?.metadata?.created_at === p.created_at ? 'active' : ''}`}
+                  onClick={() => {
+                    setCurrentPlan(p);
+                    setShowHistory(false);
+                  }}
+                >
+                  <div className="p-date">{new Date(p.created_at).toLocaleDateString()}</div>
+                  <div className="p-details">
+                    {p.itinerary.length} Days · ₹{p.constraints.budget}/pp
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <header>
         <h1>Vijayawada Travel Planner</h1>
         <p className="subtitle">Exclusively built for Vijayawada, Andhra Pradesh</p>
-        <span className="badge">V3 · Heuristic Spatio-Temporal Clustering · O(n²)</span>
+        <span className="badge">V4 · Multi-Agent Intelligence · MongoDB Persistence</span>
       </header>
 
-      {/* Form */}
       <div className="glass-panel">
         <div className="form-grid">
           <div className="input-group">
             <label>Number of People</label>
-            <input id="inp-people" type="number" min="1" value={form.peopleCount}
+            <input type="number" min="1" value={form.peopleCount}
               onChange={e => updateForm('peopleCount', e.target.value)} />
           </div>
           <div className="input-group">
             <label>Budget per Person (₹)</label>
-            <input id="inp-budget" type="number" min="500" step="500" value={form.budget}
+            <input type="number" min="500" step="500" value={form.budget}
               onChange={e => updateForm('budget', e.target.value)} />
           </div>
           <div className="input-group">
             <label>Max Days <span style={{color:'var(--text-dim)', fontSize:'0.75rem'}}>(optional)</span></label>
-            <input id="inp-days" type="number" min="1" placeholder="Leave blank to auto-calculate"
+            <input type="number" min="1" placeholder="Auto-calculate"
               value={form.days} onChange={e => updateForm('days', e.target.value)} />
           </div>
           <div className="input-group">
@@ -363,44 +297,19 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button id="btn-generate" className="btn-primary" onClick={handleSubmit} disabled={loading}
-            style={{ flex: 1 }}>
-            {loading
-              ? (agentMode ? 'Agents running…' : 'Running O(n²) Engine…')
-              : '✦  Generate Optimal Itinerary'}
-          </button>
-          <button
-            id="btn-agent-mode"
-            onClick={() => setAgentMode(m => !m)}
-            disabled={loading}
-            title={agentMode ? 'Switch to simple mode' : 'Switch to multi-agent mode'}
-            style={{
-              padding: '0 1rem', borderRadius: '10px', border: '1px solid',
-              borderColor: agentMode ? 'rgba(162,155,254,0.5)' : 'var(--glass-border)',
-              background: agentMode ? 'rgba(162,155,254,0.1)' : 'transparent',
-              color: agentMode ? '#a29bfe' : 'var(--text-secondary)',
-              fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'inherit', whiteSpace: 'nowrap',
-              transition: 'all 0.2s',
-            }}
-          >
-            {agentMode ? '🤖 Agent Mode' : '⚡ Simple Mode'}
-          </button>
-        </div>
+        <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
+          {loading ? 'Processing...' : '✦  Generate Optimal Itinerary'}
+        </button>
       </div>
 
-      {/* Error */}
       {error && <div className="error-banner">⚠️ {error}</div>}
 
-      {/* Loading */}
       {loading && (
         <div className="glass-panel loading-text">
           <div style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>{loadingMsg}</div>
           <div style={{ width: '100%', height: '3px', background: 'var(--glass-border)', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{
-              height: '100%',
-              width: '40%',
+              height: '100%', width: '40%',
               background: 'linear-gradient(90deg, transparent, #FF5A5F, transparent)',
               animation: 'shimmer 1.5s ease-in-out infinite',
             }} />
@@ -408,75 +317,52 @@ export default function App() {
         </div>
       )}
 
-      {/* Agent Activity Panel (Visible during streaming and after) */}
-      {agentMode && agentStates && (
-        <div className="glass-panel" style={{ marginBottom: '1.5rem' }}>
-          <AgentPanel agentStates={agentStates} toolCalls={toolCalls} />
+      {agentStates && (
+        <div className="glass-panel" style={{ width: '100%' }}>
+           <AgentPanel agentStates={agentStates} toolCalls={toolCalls} />
         </div>
       )}
 
-      {/* Results */}
-      {result?.raw_data && (() => {
-        const meta           = result.raw_data.metadata;
-        const extraDays      = meta.requested_days && meta.requested_days > meta.optimal_days;
-        const pdfConstraints = {
-          people_count: meta.people_count     || 1,
-          budget:       meta.budget_per_person || 0,
-          interests:    interests,   // from component state
-        };
+      {currentResult?.raw_data && (() => {
+        const meta = currentResult.raw_data.metadata;
+        const extraDays = meta.requested_days && meta.requested_days > meta.optimal_days;
         return (
           <>
             {extraDays && (
               <div className="success-banner">
                 <strong>📊 Day Optimisation Alert</strong><br />
-                You requested <strong>{meta.requested_days} days</strong> — the constraint engine
-                computed only <strong>{meta.optimal_days} days</strong> are needed. Plan trimmed to
-                avoid wasting your time.
+                Trimmed to <strong>{meta.optimal_days} days</strong> for maximum efficiency.
               </div>
             )}
 
-            {result.markdown ? (
+            {currentResult.markdown ? (
               <div className="glass-panel markdown-content">
-                <ReactMarkdown>{result.markdown}</ReactMarkdown>
+                <ReactMarkdown>{currentResult.markdown}</ReactMarkdown>
               </div>
             ) : (
-              <div className="glass-panel" style={{ borderColor: 'rgba(255,165,0,0.3)', background: 'rgba(255,165,0,0.04)' }}>
+              <div className="glass-panel" style={{ borderColor: '#ffa50233', background: '#ffa5020a' }}>
                 <p style={{ margin: 0, color: '#ffa502', fontSize: '0.85rem' }}>
-                  ⚠️ <strong>Gemini explainability unavailable</strong> — deterministic pipeline data is shown below.
-                  Check that <code>GEMINI_API_KEY</code> is set in <code>backend/.env</code>.
+                  ⚠️ Gemini explainability unavailable.
                 </p>
               </div>
             )}
 
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' }}>
-              <h2 className="results-heading" style={{ margin: 0 }}>Pipeline Data — Day-by-Day</h2>
+              <h2 className="results-heading" style={{ margin: 0 }}>Plan for {meta.actual_days_planned} Days</h2>
               <button
-                id="btn-download-pdf"
-                onClick={() => {
-                  console.log('[PDF] Generating with constraints:', pdfConstraints);
-                  downloadPDF(result, pdfConstraints);
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  background: 'linear-gradient(135deg, #2ed573, #1abc9c)',
-                  color: '#fff', border: 'none', borderRadius: '8px',
-                  padding: '0.55rem 1.1rem', fontSize: '0.85rem',
-                  fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                  boxShadow: '0 4px 12px rgba(46,213,115,0.3)',
-                  transition: 'opacity 0.2s, transform 0.1s',
-                }}
-                onMouseEnter={e => e.target.style.opacity = 0.9}
-                onMouseLeave={e => e.target.style.opacity = 1}
+                className="btn-primary"
+                onClick={() => downloadPDF(currentResult, { people_count: meta.people_count, budget: meta.budget_per_person, interests })}
+                style={{ width: 'auto', padding: '0.5rem 1rem', fontSize: '0.8rem', background: 'linear-gradient(135deg, #2ed573, #1abc9c)' }}
               >
                 ⬇ Download PDF
               </button>
             </div>
 
             <div className="day-tabs">
-              {result.raw_data.itinerary.map(d => (
+              {currentResult.raw_data.itinerary.map(d => (
                 <button key={d.day}
                   className={`tab-btn${d.day === activeDay ? ' active' : ''}`}
-                  onClick={() => { console.log('[TAB] switched to day', d.day); setActiveDay(d.day); }}
+                  onClick={() => setActiveDay(d.day)}
                 >
                   Day {d.day}
                 </button>
@@ -488,6 +374,26 @@ export default function App() {
           </>
         );
       })()}
+    </>
+  );
+}
+
+export default function App() {
+  const { isAuthenticated } = useAuthStore();
+
+  return (
+    <div className="app-container">
+      <Routes>
+        <Route path="/" element={<MainPlanner />} />
+        <Route 
+          path="/login" 
+          element={isAuthenticated ? <Navigate to="/" /> : <Login />} 
+        />
+        <Route 
+          path="/register" 
+          element={isAuthenticated ? <Navigate to="/" /> : <Register />} 
+        />
+      </Routes>
     </div>
   );
 }

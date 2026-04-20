@@ -11,12 +11,12 @@ Fallback: if Gemini fails → returns the full filtered list with no reasoning
 import json
 import logging
 import copy
-from google import genai
+from ai_service import AIClient
 
 log = logging.getLogger(__name__)
 
 
-def run(client: genai.Client, all_places: list, constraints: dict) -> dict:
+def run(client: AIClient, all_places: list, constraints: dict) -> dict:
     """
     Returns:
         {
@@ -76,12 +76,7 @@ Respond with ONLY valid JSON matching this exact schema:
 }}"""
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config={"response_mime_type": "application/json"},
-        )
-        raw = json.loads(response.text)
+        raw = client.generate_json(prompt)
 
         # Validate — ensure all ids exist in catalogue
         valid_ids = {p["id"] for p in all_places}
