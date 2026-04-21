@@ -66,6 +66,14 @@ function MainPlanner() {
   } = usePlanStore();
   
   const [form, setForm] = useState({ peopleCount: 2, budget: 5000, days: '' });
+  const [advancedForm, setAdvancedForm] = useState({
+    hotelBudgetRatio: 0.4,
+    peakSpeed: 15.0,
+    offPeakSpeed: 25.0,
+    chaosBuffer: 0.10,
+    maxHoursPerDay: 12.0
+  });
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [interests, setInterests] = useState([]);
   const [agentMode, setAgentMode] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
@@ -79,6 +87,7 @@ function MainPlanner() {
   }, [isAuthenticated, fetchPlans]);
 
   const updateForm = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  const updateAdvancedForm = (key, val) => setAdvancedForm(f => ({ ...f, [key]: val }));
   const toggleInterest = (id) =>
     setInterests(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
 
@@ -93,6 +102,11 @@ function MainPlanner() {
       budget:       parseFloat(form.budget)         || 1000,
       interests,
       days:         form.days ? parseInt(form.days, 10) : null,
+      hotel_budget_ratio: parseFloat(advancedForm.hotelBudgetRatio) || 0.4,
+      peak_speed:         parseFloat(advancedForm.peakSpeed) || 15.0,
+      off_peak_speed:     parseFloat(advancedForm.offPeakSpeed) || 25.0,
+      chaos_buffer:       parseFloat(advancedForm.chaosBuffer) || 0.10,
+      max_hours_per_day:  parseFloat(advancedForm.maxHoursPerDay) || 12.0
     };
     startPlanningStream(payload, useAuthStore.getState().token);
   };
@@ -297,7 +311,48 @@ function MainPlanner() {
           </div>
         </div>
 
-        <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
+        <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+          <button 
+            type="button" 
+            className="btn-ghost" 
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+          >
+            {showAdvanced ? 'Hide Advanced Options ⚙️' : 'Show Advanced Options ⚙️'}
+          </button>
+          
+          {showAdvanced && (
+            <div className="form-grid" style={{ marginTop: '1rem', backgroundColor: 'var(--surface-color)', padding: '1rem', borderRadius: '8px' }}>
+              <div className="input-group">
+                <label>Hotel Budget Ratio <span style={{color:'var(--text-dim)', fontSize:'0.75rem'}}>(0.1 = 10%)</span></label>
+                <input type="number" step="0.05" min="0" max="1" value={advancedForm.hotelBudgetRatio}
+                  onChange={e => updateAdvancedForm('hotelBudgetRatio', e.target.value)} />
+              </div>
+              <div className="input-group">
+                <label>Peak Traffic Speed (km/h)</label>
+                <input type="number" step="1" min="1" value={advancedForm.peakSpeed}
+                  onChange={e => updateAdvancedForm('peakSpeed', e.target.value)} />
+              </div>
+              <div className="input-group">
+                <label>Off-Peak Speed (km/h)</label>
+                <input type="number" step="1" min="1" value={advancedForm.offPeakSpeed}
+                  onChange={e => updateAdvancedForm('offPeakSpeed', e.target.value)} />
+              </div>
+              <div className="input-group">
+                <label>Chaos Buffer Fraction <span style={{color:'var(--text-dim)', fontSize:'0.75rem'}}>(0.1 = 10%)</span></label>
+                <input type="number" step="0.01" min="0" value={advancedForm.chaosBuffer}
+                  onChange={e => updateAdvancedForm('chaosBuffer', e.target.value)} />
+              </div>
+              <div className="input-group">
+                <label>Max Usable Hours per Day</label>
+                <input type="number" step="0.5" min="2" max="24" value={advancedForm.maxHoursPerDay}
+                  onChange={e => updateAdvancedForm('maxHoursPerDay', e.target.value)} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button className="btn-primary" onClick={handleSubmit} disabled={loading} style={{ marginTop: '1.5rem' }}>
           {loading ? 'Processing...' : '✦  Generate Optimal Itinerary'}
         </button>
       </div>

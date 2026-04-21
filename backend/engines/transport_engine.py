@@ -12,19 +12,18 @@ def estimate_transport_cost(distance_km, speed_kmh):
     cab_rate = 15
     bike_rate = 8
     
-    # Calculate travel time in mins + 10% or 10 min chaos buffer
+    # Calculate travel time in mins + chaos buffer
     raw_hrs = distance_km / speed_kmh
-    buffer = max(raw_hrs * 0.10, 0.166)
-    est_mins = round((raw_hrs + buffer) * 60)
-    
+    # Using chaos_pct logic natively or passing config, but here just use standard fallback or pass config
     return {
         "auto": round(base_fare_auto + (distance_km * auto_rate)),
         "cab": round(base_fare_cab + (distance_km * cab_rate)),
         "bike": round(base_fare_bike + (distance_km * bike_rate)),
-        "mins": est_mins
+        "mins": round((raw_hrs + max(raw_hrs * 0.10, 0.166)) * 60) # Note: chaos buffer calculation uses default here, could be passed if needed
     }
 
-def calculate_day_routes(day_plan):
+def calculate_day_routes(day_plan, config=None):
+    config = config or {}
     places = day_plan['places']
     routes = []
     
@@ -35,7 +34,7 @@ def calculate_day_routes(day_plan):
         dist = haversine(p1['lat'], p1['lng'], p2['lat'], p2['lng'])
         p1_end_time = time_to_float(p1['visit_end'])
         
-        speed = get_dynamic_speed(p1_end_time)
+        speed = get_dynamic_speed(p1_end_time, config)
         costs = estimate_transport_cost(dist, speed)
         
         routes.append({

@@ -56,6 +56,11 @@ class PlanRequest(BaseModel):
     budget:       float = Field(gt=0)
     interests:    List[str] = []
     days:         Optional[int] = Field(default=None, gt=0)
+    # Advanced Options
+    hotel_budget_ratio: Optional[float] = Field(default=0.4, ge=0.0, le=1.0)
+    peak_speed:         Optional[float] = Field(default=15.0, gt=0)
+    off_peak_speed:     Optional[float] = Field(default=25.0, gt=0)
+    chaos_buffer:       Optional[float] = Field(default=0.10, ge=0.0)
 
 
 # ── SSE helper ────────────────────────────────────────────────────────────────
@@ -142,6 +147,11 @@ async def plan_trip_stream(req: PlanRequest, current_user: UserInDB = Depends(ge
     constraints = req.model_dump()
 
     async def event_generator():
+        # ── Strict Validations ────────────────────────────────────────────────
+        if req.budget < 1500:
+            yield sse("error", message=f"Budget of ₹{req.budget} is too low. A minimum budget of ₹1500 per person is required for a safe trip.")
+            return
+
         # ── Pre-run: filter + budget (now using Prolog) ──────────
         filtered_raw = filter_places_with_prolog(DB['places'], interests=req.interests)
         if not filtered_raw:
@@ -150,7 +160,7 @@ async def plan_trip_stream(req: PlanRequest, current_user: UserInDB = Depends(ge
 
         all_places = copy.deepcopy(filtered_raw)
         group_budget      = req.budget * req.people_count
-        budget_per_night  = group_budget * 0.4
+        budget_per_night  = group_budget * req.hotel_budget_ratio
         affordable_hotels = _filter_hotels_by_budget(DB['hotels'], budget_per_night)
 
         # ── AGENT 1: Researcher ───────────────────────────────────────────────

@@ -49,7 +49,7 @@ def run(
     # ── Tool 1: constraint_engine ─────────────────────────────────────────────
     user_days    = constraints.get("days")
     optimal_days = calculate_optimal_days(ordered)
-    actual_days  = min(optimal_days, user_days) if user_days else optimal_days
+    actual_days  = user_days if user_days else optimal_days
 
     tool_calls.append({
         "tool":           "constraint_engine.calculate_optimal_days",
@@ -59,7 +59,7 @@ def run(
 
     # ── Tool 2: clustering_engine ─────────────────────────────────────────────
     interests    = constraints.get("interests", [])
-    day_clusters = cluster_places_by_day(ordered, actual_days, user_interests=interests)
+    day_clusters = cluster_places_by_day(ordered, actual_days, user_interests=interests, config=constraints)
 
     tool_calls.append({
         "tool":           "clustering_engine.cluster_places_by_day",
@@ -71,7 +71,7 @@ def run(
 
     # ── Tool 3: transport_engine ──────────────────────────────────────────────
     for day in day_clusters:
-        calculate_day_routes(day)
+        calculate_day_routes(day, config=constraints)
 
     route_count = sum(len(d.get("routes", [])) for d in day_clusters)
     tool_calls.append({
@@ -102,7 +102,7 @@ def run(
             "people_count":       people,
             "budget_per_person":  budget,
             "message": (
-                "Optimized: extra days removed."
+                "Relaxed Schedule: Places spaced out over requested days."
                 if user_days and user_days > optimal_days
                 else "Optimal plan generated."
             ),

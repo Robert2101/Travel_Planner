@@ -40,32 +40,42 @@ def get_max_distance(places):
     return max_d
 
 # ── Dynamic urban speed (km/h) ────────────────────────────────────────────────
-def get_dynamic_speed(t: float) -> float:
+def get_dynamic_speed(t: float, config: dict = None) -> float:
+    config = config or {}
+    peak_speed = config.get("peak_speed", 15.0)
+    off_peak_speed = config.get("off_peak_speed", 25.0)
     if (8.5 <= t <= 10.5) or (17.5 <= t <= 20.0):
-        return 15.0   # peak hours
-    return 25.0       # off-peak
+        return peak_speed   # peak hours
+    return off_peak_speed       # off-peak
 
 # ── Arrival calculator with chaos buffer ──────────────────────────────────────
-def calculate_arrival(current_time, clat, clng, target):
+def calculate_arrival(current_time, clat, clng, target, config=None):
+    config = config or {}
+    chaos_pct = config.get("chaos_buffer", 0.10)
+    
     dist       = haversine(clat, clng, target['lat'], target['lng'])
-    speed      = get_dynamic_speed(current_time)
+    speed      = get_dynamic_speed(current_time, config)
     travel_hrs = dist / speed
-    buffer     = max(travel_hrs * 0.10, 10/60)   # max(10 %, 10 min)
+    # max(chaos_pct %, 10 min)
+    buffer     = max(travel_hrs * chaos_pct, 10/60)
     return current_time + travel_hrs + buffer, dist
 
 
 # ── Main clustering function ──────────────────────────────────────────────────
-def cluster_places_by_day(places, days_required, user_interests=None):
+def cluster_places_by_day(places, days_required, user_interests=None, config=None):
     if not places:
         return []
 
+    config = config or {}
     user_interests = user_interests or []
     max_dist       = get_max_distance(places)
     unvisited      = list(places)   # already deep-copied in app.py
     days           = []
 
+    places_per_day_target = math.ceil(len(places) / days_required) if days_required > 0 else 999
+
     DAY_START      = 9.0
-    DAY_END        = 21.0
+    DAY_END        = DAY_START + config.get("max_hours_per_day", 12.0)
     TOTAL_DAY_HRS  = DAY_END - DAY_START
 
     for day_idx in range(days_required):
@@ -98,7 +108,7 @@ def cluster_places_by_day(places, days_required, user_interests=None):
                 target_close = time_to_float(p['closing_time'])
 
                 arrival, dist = calculate_arrival(
-                    current_time, current_place['lat'], current_place['lng'], p
+                    current_time, current_place['lat'], current_place['lng'], p, config
                 )
 
                 wait_time = 0.0
@@ -128,6 +138,10 @@ def cluster_places_by_day(places, days_required, user_interests=None):
                 chosen['visit_end']    = float_to_time(current_time)
                 current_day_places.append(chosen)
                 current_place = chosen
+                
+                # Check circuit breaker for relaxed schedules
+                if len(current_day_places) >= places_per_day_target:
+                    break
             else:
                 break   # nothing valid left for today
 
@@ -138,7 +152,7 @@ def cluster_places_by_day(places, days_required, user_interests=None):
                 t_open       = time_to_float(p['opening_time'])
                 t_close      = time_to_float(p['closing_time'])
                 arrival, _   = calculate_arrival(current_time,
-                                                  current_place['lat'], current_place['lng'], p)
+                                                  current_place['lat'], current_place['lng'], p, config)
                 if arrival < t_open:
                     arrival = t_open
                 finish = arrival + p.get('avg_time_hours', 2)
@@ -149,6 +163,9 @@ def cluster_places_by_day(places, days_required, user_interests=None):
                     chosen['visit_end']  = float_to_time(current_time)
                     current_day_places.append(chosen)
                     current_place = chosen
+                    
+                    if len(current_day_places) >= places_per_day_target:
+                        break
 
         days.append({
             "day":         day_idx + 1,
